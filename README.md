@@ -39,6 +39,7 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 ## GitHub Actions
 - Workflow je v `.github/workflows/feed.yml`.
 - Spousti se rucne pres `workflow_dispatch` a take 1x denne.
+- Automaticky beh je nastaven na 05:30 `Europe/Prague` a je osetreny proti letnimu/zimnimu casu (DST).
 - V GitHub repozitari je potreba nastavit secret `FEED_URL` s realnou URL vstupniho XML feedu.
 - Secret `OPENAI_API_KEY` je volitelny. Kdyz nebude nastaveny, workflow i tak vygeneruje XML feed a auditni artifacty, jen bez AI optimalizace.
 - Rucni spusteni: GitHub `Actions` -> `Generate Feed` -> `Run workflow`.
