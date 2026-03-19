@@ -1,0 +1,17 @@
+{
+  "feed_url": "https://example.cz/heureka/export/products.xml?hash=REPLACE_ME",
+  "model": "gpt-4o-mini",
+  "default_margin_percent": 40,
+  "currency": "CZK",
+  "delivery_date_active_max": 1,
+  "optimize_title": true,
+  "optimize_description": true,
+  "optimize_product_type": true,
+  "generate_intent_label": true,
+  "generate_segment_label": true,
+  "prompt_template": "default_cz_shopping",
+  "custom_prompt": "",
+  "margin_csv_path": "",
+  "output_path": "data/output/optimized_feed.xml",
+  "cache_path": "data/cache.json"
+}
