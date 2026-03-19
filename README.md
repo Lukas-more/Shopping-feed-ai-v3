@@ -49,3 +49,10 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - Pokud Pages jeste nebezi, v GitHubu otevri `Settings` -> `Pages` a jako source nastav `GitHub Actions`.
 - Po uspesnem behu workflow najdes verejnou URL i v sekci `Deploy to GitHub Pages` nebo v `Settings` -> `Pages`.
 - Rucni spusteni workflow zustava: `Actions` -> `Generate Feed` -> `Run workflow`.
+
+## Prvni spusteni checklist
+- V GitHub repozitari otevri `Settings` -> `Secrets and variables` -> `Actions` a zaloz secret `FEED_URL`.
+- Jako hodnotu `FEED_URL` nastav: `https://www.plaza.cz/heureka/export/products.xml?hash=X4SOE1liV0PnOQmeqEid2jX`
+- Otevri `Settings` -> `Pages` a jako source nastav `GitHub Actions`.
+- Otevri `Actions` -> `Generate Feed` -> `Run workflow`.
+- Po uspesnem dobehu over verejnou URL `https://lukas-more.github.io/Shopping-feed-ai-v3/feed.xml`.
