@@ -1,5 +1,14 @@
 name: Generate Feed
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
 on:
   workflow_dispatch:
   schedule:
@@ -8,6 +17,9 @@ on:
 jobs:
   build-feed:
     runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
 
     steps:
       - name: Check out repository
@@ -62,3 +74,31 @@ jobs:
             data/output/*.xml
             data/output/*.csv
             data/output/*.json
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Prepare Pages content
+        run: |
+          mkdir -p site
+          cp data/output/optimized_feed.xml site/feed.xml
+          cp data/output/optimized_feed.xml site/optimized_feed.xml
+
+          if compgen -G "data/output/*.csv" > /dev/null; then
+            cp data/output/*.csv site/
+          fi
+
+          if compgen -G "data/output/*.json" > /dev/null; then
+            cp data/output/*.json site/
+          fi
+
+          touch site/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4

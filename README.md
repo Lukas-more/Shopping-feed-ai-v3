@@ -42,3 +42,10 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - V GitHub repozitari je potreba nastavit secret `FEED_URL` s realnou URL vstupniho XML feedu.
 - Secret `OPENAI_API_KEY` je volitelny. Kdyz nebude nastaveny, workflow i tak vygeneruje XML feed a auditni artifacty, jen bez AI optimalizace.
 - Rucni spusteni: GitHub `Actions` -> `Generate Feed` -> `Run workflow`.
+
+## GitHub Pages
+- Workflow po vygenerovani feedu publikuje `data/output/optimized_feed.xml` na GitHub Pages jako stabilni `feed.xml`.
+- Ocekavana URL pro tento repozitar je `https://lukas-more.github.io/Shopping-feed-ai-v3/feed.xml`.
+- Pokud Pages jeste nebezi, v GitHubu otevri `Settings` -> `Pages` a jako source nastav `GitHub Actions`.
+- Po uspesnem behu workflow najdes verejnou URL i v sekci `Deploy to GitHub Pages` nebo v `Settings` -> `Pages`.
+- Rucni spusteni workflow zustava: `Actions` -> `Generate Feed` -> `Run workflow`.
