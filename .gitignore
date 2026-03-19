@@ -21,6 +21,7 @@ env/
 .env.*
 !.env.example
 config/settings.local.json
+config/settings.runtime.json
 
 # Generated data
 data/cache.json

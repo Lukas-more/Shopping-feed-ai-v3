@@ -1,0 +1,64 @@
+name: Generate Feed
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 4 * * *"
+
+jobs:
+  build-feed:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Prepare runtime settings
+        env:
+          FEED_URL: ${{ secrets.FEED_URL }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          feed_url = os.environ.get("FEED_URL", "").strip()
+          if not feed_url:
+              raise SystemExit("Missing GitHub secret FEED_URL.")
+
+          source = Path("config/settings.example.json")
+          target = Path("config/settings.runtime.json")
+          settings = json.loads(source.read_text(encoding="utf-8"))
+          settings["feed_url"] = feed_url
+          target.write_text(
+              json.dumps(settings, ensure_ascii=False, indent=2),
+              encoding="utf-8",
+          )
+          print(f"Runtime settings written to {target}")
+          PY
+
+      - name: Generate feed
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python -m src.core.pipeline --settings config/settings.runtime.json
+
+      - name: Upload feed artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: shopping-feed-output
+          if-no-files-found: error
+          path: |
+            data/output/*.xml
+            data/output/*.csv
+            data/output/*.json

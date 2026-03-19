@@ -36,3 +36,9 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - Feed pro GMC musí být po vygenerování dostupný na veřejné URL, pokud ho má Google Merchant Center stahovat automaticky.
 - `ACCESSORY` z Heureka feedu nemá přímý standardní ekvivalent v GMC feedu a nepřenáší se.
 - Pokud nepoužiješ OpenAI klíč, aplikace umí aspoň analyzovat feed a spočítat odhad produktů/ceny.
+## GitHub Actions
+- Workflow je v `.github/workflows/feed.yml`.
+- Spousti se rucne pres `workflow_dispatch` a take 1x denne.
+- V GitHub repozitari je potreba nastavit secret `FEED_URL` s realnou URL vstupniho XML feedu.
+- Secret `OPENAI_API_KEY` je volitelny. Kdyz nebude nastaveny, workflow i tak vygeneruje XML feed a auditni artifacty, jen bez AI optimalizace.
+- Rucni spusteni: GitHub `Actions` -> `Generate Feed` -> `Run workflow`.

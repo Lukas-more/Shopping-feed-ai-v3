@@ -220,7 +220,7 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
             json.dumps(cache, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
-
+    if not dry_run:
         final_output_path, xml_warning = _write_xml_with_fallback(tree, output_path)
 
     estimated_seconds = round(ai_candidates * ESTIMATED_SECONDS_PER_AI_CALL)
