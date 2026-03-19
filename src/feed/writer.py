@@ -1,3 +1,5 @@
+import unicodedata
+
 from lxml import etree as ET
 from src.core.models import Product
 from src.feed.labels import resolve_search_intent_with_source, resolve_segment_with_source
@@ -12,6 +14,84 @@ def gtag(name: str) -> str:
     return f"{{{GNS}}}{name}"
 
 
+def _normalize_lookup(value: str) -> str:
+    ascii_value = unicodedata.normalize("NFKD", value or "").encode("ascii", "ignore").decode("ascii")
+    return " ".join(ascii_value.lower().split())
+
+
+def _extract_size(params_map: dict[str, str]) -> str:
+    for name, value in params_map.items():
+        if _normalize_lookup(name) in {"velikost", "size", "vel."} and value.strip():
+            return value.strip()
+    return ""
+
+
+def _title_has_size(title: str, size_value: str) -> bool:
+    normalized_title = _normalize_lookup(title)
+    normalized_size = _normalize_lookup(size_value)
+    if not normalized_size:
+        return False
+    return normalized_size in normalized_title
+
+
+def _clean_title_edges(value: str) -> str:
+    return value.strip(" ,;:-")
+
+
+def _truncate_title_preserving_suffix(title: str, suffix: str, max_len: int = 70) -> str:
+    title = _clean_title_edges(title)
+    suffix = _clean_title_edges(suffix)
+    if not suffix:
+        return title[:max_len].strip()
+    if len(title) <= max_len:
+        return title
+    available = max_len - len(suffix) - 3
+    if available <= 8:
+        return suffix[:max_len]
+    base = _clean_title_edges(title[:available])
+    if " " in base:
+        base = base.rsplit(" ", 1)[0]
+    return _clean_title_edges(f"{base} - {suffix}")
+
+
+def _ensure_variant_size_in_title(title: str, size_value: str) -> str:
+    if not size_value:
+        return title
+    suffix = f"Velikost {size_value}"
+    if _title_has_size(title, size_value):
+        if len(title) > 70:
+            return _truncate_title_preserving_suffix(title, suffix)
+        return title
+    return _truncate_title_preserving_suffix(f"{title} - {suffix}", suffix)
+
+
+def _is_female_underwear_product(product: Product, product_type: str) -> bool:
+    combined = " ".join(
+        [
+            product.title,
+            product.category_text,
+            product_type,
+            product.variant_text(),
+        ]
+    )
+    normalized = _normalize_lookup(combined)
+    if "det" in normalized:
+        return False
+    keywords = (
+        "podprsen",
+        "push-up",
+        "kalhotky",
+        "spodni pradlo",
+        "bralette",
+    )
+    return any(keyword in normalized for keyword in keywords)
+
+
+def _identifier_exists_value(data: dict[str, str]) -> str:
+    has_identifier = any((data.get(field) or "").strip() for field in ("gtin", "brand", "mpn"))
+    return "yes" if has_identifier else "no"
+
+
 def build_gmc_feed(products: list[Product], optimized_map: dict, price_buckets: dict[str, str], margin_map: dict[str, str], default_margin_percent: int, currency: str = "CZK") -> ET._ElementTree:
     rss = ET.Element("rss", nsmap=NSMAP, version="2.0")
     channel = ET.SubElement(rss, "channel")
@@ -22,8 +102,13 @@ def build_gmc_feed(products: list[Product], optimized_map: dict, price_buckets: 
     for p in products:
         data = optimized_map.setdefault(p.item_id, {})
         item = ET.SubElement(channel, "item")
-        final_title, title_changed_by_postprocess = normalize_title(data.get("title") or p.title)
         params_map = {param.name: param.value for param in p.params if param.name}
+        size_value = _extract_size(params_map)
+        final_title, title_changed_by_postprocess = normalize_title(data.get("title") or p.title)
+        if p.item_group_id and size_value:
+            sized_title = _ensure_variant_size_in_title(final_title, size_value)
+            title_changed_by_postprocess = title_changed_by_postprocess or sized_title != final_title
+            final_title = sized_title
         description, description_source = finalize_description(
             ai_description=data.get("description", ""),
             raw_html_or_text=p.description_html,
@@ -92,9 +177,14 @@ def build_gmc_feed(products: list[Product], optimized_map: dict, price_buckets: 
         ET.SubElement(item, gtag("product_type")).text = product_type
         if p.item_group_id:
             ET.SubElement(item, gtag("item_group_id")).text = p.item_group_id
+        if p.item_group_id and size_value:
+            ET.SubElement(item, gtag("size")).text = size_value
+        if p.item_group_id and size_value and _is_female_underwear_product(p, product_type):
+            ET.SubElement(item, gtag("gender")).text = "female"
+            ET.SubElement(item, gtag("age_group")).text = "adult"
         if data.get("gtin"):
             ET.SubElement(item, gtag("gtin")).text = data["gtin"]
-        ET.SubElement(item, gtag("identifier_exists")).text = "FALSE"
+        ET.SubElement(item, gtag("identifier_exists")).text = _identifier_exists_value(data)
         for d in p.deliveries:
             ship = ET.SubElement(item, gtag("shipping"))
             ET.SubElement(ship, gtag("country")).text = "CZ"
