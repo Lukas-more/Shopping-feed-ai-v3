@@ -12,7 +12,7 @@ concurrency:
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 4 * * *"
+    - cron: "30 4 * * *"
 
 jobs:
   build-feed:
