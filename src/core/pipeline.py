@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from datetime import datetime
@@ -36,6 +37,34 @@ def is_active_for_ai(product, active_max: int) -> bool:
     except ValueError:
         return False
     return dd <= active_max
+
+
+def _cache_context_key(settings: dict, template_key: str, expected_output_tokens: int) -> str:
+    payload = {
+        "model": settings.get("model", "gpt-4o-mini"),
+        "prompt_template": template_key,
+        "custom_prompt": settings.get("custom_prompt", ""),
+        "expected_output_tokens": expected_output_tokens,
+        "optimize_title": settings.get("optimize_title", True),
+        "optimize_description": settings.get("optimize_description", True),
+        "optimize_product_type": settings.get("optimize_product_type", True),
+        "generate_intent_label": settings.get("generate_intent_label", True),
+        "generate_segment_label": settings.get("generate_segment_label", True),
+    }
+    return hashlib.md5(json.dumps(payload, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _resolve_max_ai_products(settings: dict) -> int | None:
+    raw_value = os.getenv("MAX_AI_PRODUCTS", settings.get("max_ai_products", ""))
+    if raw_value in ("", None):
+        return None
+    try:
+        limit = int(raw_value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("MAX_AI_PRODUCTS musi byt cele nezaporne cislo.") from exc
+    if limit < 0:
+        raise ValueError("MAX_AI_PRODUCTS musi byt cele nezaporne cislo.")
+    return limit
 
 
 def _write_json_with_fallback(output_path: Path, payload: dict) -> tuple[Path, str | None]:
@@ -110,6 +139,9 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
         user_prompt_template = settings["custom_prompt"]
         expected_output_tokens = int(settings.get("expected_output_tokens", expected_output_tokens))
 
+    cache_context = _cache_context_key(settings, template_key, expected_output_tokens)
+    max_ai_products = _resolve_max_ai_products(settings)
+
     optimizer = OpenAIOptimizer(
         api_key=api_key,
         model=settings.get("model", "gpt-4o-mini"),
@@ -119,23 +151,33 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
     estimated = UsageCost()
     actual = UsageCost()
     cache_hits = 0
+    cache_misses = 0
     active_products = 0
     skipped_inactive = 0
     ai_candidates = 0
+    ai_attempted = 0
     ai_calls = 0
     ai_errors = 0
+    ai_skipped_missing_key = 0
+    ai_skipped_due_limit = 0
 
     for index, p in enumerate(products, start=1):
         h = product_hash(p)
         active = is_active_for_ai(p, int(settings.get("delivery_date_active_max", 1)))
 
-        if p.item_id in cache and cache[p.item_id].get("hash") == h:
+        if (
+            p.item_id in cache
+            and cache[p.item_id].get("hash") == h
+            and cache[p.item_id].get("context") == cache_context
+        ):
             cached_data = dict(cache[p.item_id].get("data", {}))
             cached_data["_ai_used"] = False
             cached_data["_ai_success"] = bool(cache[p.item_id].get("data"))
             optimized_map[p.item_id] = cached_data
             cache_hits += 1
             continue
+
+        cache_misses += 1
 
         if not active:
             optimized_map.setdefault(p.item_id, {})
@@ -162,8 +204,17 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
             optimized_map.setdefault(p.item_id, {})
             optimized_map[p.item_id]["_ai_used"] = False
             optimized_map[p.item_id]["_ai_success"] = False
+            ai_skipped_missing_key += 1
             continue
 
+        if max_ai_products is not None and ai_attempted >= max_ai_products:
+            optimized_map.setdefault(p.item_id, {})
+            optimized_map[p.item_id]["_ai_used"] = False
+            optimized_map[p.item_id]["_ai_success"] = False
+            ai_skipped_due_limit += 1
+            continue
+
+        ai_attempted += 1
         try:
             data, usage = optimizer.optimize_json(system_prompt, user_prompt)
         except (APITimeoutError, APIConnectionError, RateLimitError, APIError, ValueError) as e:
@@ -186,6 +237,7 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
         optimized_map[p.item_id]["_ai_success"] = True
         cache[p.item_id] = {
             "hash": h,
+            "context": cache_context,
             "data": data,
         }
 
@@ -232,11 +284,16 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
         "products_total": len(products),
         "cache_entries": len(cache),
         "cache_hits": cache_hits,
+        "cache_misses": cache_misses,
         "products_skipped_inactive": skipped_inactive,
         "products_needing_refresh": active_products,
         "ai_candidates": ai_candidates,
+        "ai_attempted": ai_attempted,
         "ai_calls": ai_calls,
         "ai_errors": ai_errors,
+        "ai_skipped_missing_key": ai_skipped_missing_key,
+        "ai_skipped_due_limit": ai_skipped_due_limit,
+        "max_ai_products": max_ai_products,
         "estimated_runtime_seconds": estimated_seconds,
         "estimated_runtime_minutes_range": f"{estimated_minutes_low}-{estimated_minutes_high}",
         "estimated_input_tokens": estimated.input_tokens,
@@ -264,6 +321,20 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
     run_stats["qa_report_path"] = str(final_qa_report_path)
     run_stats["audit_csv_path"] = str(final_audit_csv_path)
     run_stats["warnings"] = warnings
+    print(
+        "[RUN SUMMARY] "
+        f"products_total={run_stats['products_total']} "
+        f"cache_hits={cache_hits} "
+        f"cache_misses={cache_misses} "
+        f"skipped_inactive={skipped_inactive} "
+        f"ai_candidates={ai_candidates} "
+        f"ai_attempted={ai_attempted} "
+        f"ai_calls={ai_calls} "
+        f"ai_errors={ai_errors} "
+        f"ai_skipped_missing_key={ai_skipped_missing_key} "
+        f"ai_skipped_due_limit={ai_skipped_due_limit} "
+        f"max_ai_products={max_ai_products}"
+    )
     return run_stats
 
 

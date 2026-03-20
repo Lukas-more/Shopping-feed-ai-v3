@@ -52,6 +52,16 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Restore AI cache
+        if: steps.prague_time.outputs.should_run == 'true'
+        id: ai_cache_restore
+        uses: actions/cache/restore@v4
+        with:
+          path: data/cache.json
+          key: shopping-feed-ai-cache-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            shopping-feed-ai-cache-${{ github.ref_name }}-
+
       - name: Install dependencies
         if: steps.prague_time.outputs.should_run == 'true'
         run: |
@@ -97,9 +107,17 @@ jobs:
           name: shopping-feed-output
           if-no-files-found: error
           path: |
+            data/cache.json
             data/output/*.xml
             data/output/*.csv
             data/output/*.json
+
+      - name: Save AI cache
+        if: steps.prague_time.outputs.should_run == 'true' && hashFiles('data/cache.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: data/cache.json
+          key: shopping-feed-ai-cache-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: Configure GitHub Pages
         if: steps.prague_time.outputs.should_run == 'true'

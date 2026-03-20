@@ -42,6 +42,7 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - Automaticky beh je nastaven na 05:30 `Europe/Prague` a je osetreny proti letnimu/zimnimu casu (DST).
 - V GitHub repozitari je potreba nastavit secret `FEED_URL` s realnou URL vstupniho XML feedu.
 - Secret `OPENAI_API_KEY` je volitelny. Kdyz nebude nastaveny, workflow i tak vygeneruje XML feed a auditni artifacty, jen bez AI optimalizace.
+- AI cache z `data/cache.json` se v GitHub Actions obnovuje a uklada mezi behy, aby se stejne produkty znovu neposilaly do OpenAI.
 - Rucni spusteni: GitHub `Actions` -> `Generate Feed` -> `Run workflow`.
 
 ## GitHub Pages
@@ -57,3 +58,11 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - Otevri `Settings` -> `Pages` a jako source nastav `GitHub Actions`.
 - Otevri `Actions` -> `Generate Feed` -> `Run workflow`.
 - Po uspesnem dobehu over verejnou URL `https://lukas-more.github.io/Shopping-feed-ai-v3/feed.xml`.
+
+## AI cache
+- Hash produktu se pocita z `item_id`, `title`, vycisteneho `description_html`, `category_text` a `variant_text`.
+- Cache je v `data/cache.json`.
+- Cache hit nastane jen kdyz sedi hash produktu i cache context (model + prompt/template nastaveni).
+- V Actions logu a v JSON vystupu uvidis `cache_hits`, `cache_misses`, `ai_candidates`, `ai_calls`, `ai_skipped_missing_key` a `ai_skipped_due_limit`.
+- Ochranny limit lze nastavit pres GitHub Actions environment variable nebo local env `MAX_AI_PRODUCTS`.
+- Bez zmen produktu a bez zmen relevantni AI konfigurace by dalsi beh mel byt vyrazne levnejsi nez bootstrap prvni naplneni cache.
