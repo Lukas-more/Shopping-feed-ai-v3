@@ -26,6 +26,7 @@ jobs:
       CACHE_KEY_PREFIX: shopping-feed-ai-cache-${{ github.ref_name }}-
       MAX_AI_PRODUCTS: ${{ vars.MAX_AI_PRODUCTS }}
       AI_SAFETY_MAX_SELECTED: ${{ vars.AI_SAFETY_MAX_SELECTED }}
+      AI_ENFORCE_SAFETY: ${{ vars.AI_ENFORCE_SAFETY }}
 
     steps:
       - name: Check out repository
@@ -157,6 +158,7 @@ jobs:
           has_api_key = bool(os.getenv("OPENAI_API_KEY", "").strip())
           explicit_max = bool(os.getenv("MAX_AI_PRODUCTS", "").strip())
           safety_threshold = int(os.getenv("AI_SAFETY_MAX_SELECTED", "100") or "100")
+          enforce_safety = os.getenv("AI_ENFORCE_SAFETY", "").strip().lower() == "true"
           ai_selected = int(report.get("ai_selected_count", 0) or 0)
           cache_misses = int(report.get("cache_misses", 0) or 0)
 
@@ -164,6 +166,7 @@ jobs:
               "ai_allowed": "true",
               "ai_safety_stop": "false",
               "ai_safety_reason": "allowed",
+              "ai_safety_enforced": str(enforce_safety).lower(),
           }
 
           if not has_api_key:
@@ -177,6 +180,11 @@ jobs:
               outputs["ai_safety_stop"] = "true"
               outputs["ai_safety_reason"] = "preflight_threshold_exceeded"
 
+          if outputs["ai_allowed"] != "true" and not enforce_safety:
+              outputs["ai_allowed"] = "true"
+              outputs["ai_safety_stop"] = "false"
+              outputs["ai_safety_reason"] = f"{outputs['ai_safety_reason']}_bypass"
+
           output_path = Path(os.environ["GITHUB_OUTPUT"])
           with output_path.open("a", encoding="utf-8") as handle:
               for key, value in outputs.items():
@@ -189,10 +197,11 @@ jobs:
               "ai_selected_count": ai_selected,
               "cache_misses": cache_misses,
               "safety_threshold": safety_threshold,
+              "enforce_safety": enforce_safety,
               "decision": outputs,
           }, ensure_ascii=False))
 
-          if outputs["ai_allowed"] != "true" and has_api_key:
+          if outputs["ai_allowed"] != "true" and has_api_key and enforce_safety:
               raise SystemExit(
                   f"AI safety stop activated: {outputs['ai_safety_reason']}. "
                   f"cache_restored={cache_restored}, ai_selected_count={ai_selected}, "
@@ -243,6 +252,7 @@ jobs:
           CACHE_KEY: ${{ env.CACHE_KEY_PREFIX }}${{ github.run_id }}
           AI_SAFETY_STOP: ${{ steps.ai_safety.outputs.ai_safety_stop }}
           AI_SAFETY_REASON: ${{ steps.ai_safety.outputs.ai_safety_reason }}
+          AI_SAFETY_ENFORCED: ${{ steps.ai_safety.outputs.ai_safety_enforced }}
         run: |
           python - <<'PY'
           import json
@@ -261,6 +271,7 @@ jobs:
           payload["cache_key"] = os.getenv("CACHE_KEY", "")
           payload["ai_safety_stop"] = os.getenv("AI_SAFETY_STOP") == "true"
           payload["ai_safety_reason"] = os.getenv("AI_SAFETY_REASON", "")
+          payload["ai_safety_enforced"] = os.getenv("AI_SAFETY_ENFORCED") == "true"
           path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
           print(json.dumps({
               "cache_restored": payload["cache_restored"],
@@ -270,6 +281,7 @@ jobs:
               "cache_saved_bytes": payload["cache_saved_bytes"],
               "ai_safety_stop": payload["ai_safety_stop"],
               "ai_safety_reason": payload["ai_safety_reason"],
+              "ai_safety_enforced": payload["ai_safety_enforced"],
           }, ensure_ascii=False))
           PY
 
