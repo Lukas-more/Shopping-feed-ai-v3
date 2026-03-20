@@ -255,6 +255,7 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
     output_path = ROOT / settings.get("output_path", "data/output/optimized_feed.xml")
     qa_report_path = output_path.with_name("feed_qa_report.json")
     audit_csv_path = output_path.with_name("feed_audit.csv")
+    run_report_path = output_path.with_name("feed_run_report.json")
 
     tree = build_gmc_feed(
         products,
@@ -320,7 +321,13 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
     run_stats["qa_report"] = qa_report
     run_stats["qa_report_path"] = str(final_qa_report_path)
     run_stats["audit_csv_path"] = str(final_audit_csv_path)
+    run_stats["run_report_path"] = str(run_report_path)
     run_stats["warnings"] = warnings
+    final_run_report_path, run_report_warning = _write_json_with_fallback(run_report_path, run_stats)
+    if run_report_warning:
+        warnings.append(run_report_warning)
+        run_stats["warnings"] = warnings
+        run_stats["run_report_path"] = str(final_run_report_path)
     print(
         "[RUN SUMMARY] "
         f"products_total={run_stats['products_total']} "

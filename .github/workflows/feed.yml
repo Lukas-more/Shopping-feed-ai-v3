@@ -95,13 +95,14 @@ jobs:
 
       - name: Generate feed
         if: steps.prague_time.outputs.should_run == 'true'
+        id: generate_feed
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           python -m src.core.pipeline --settings config/settings.runtime.json
 
       - name: Upload feed artifacts
-        if: steps.prague_time.outputs.should_run == 'true'
+        if: steps.prague_time.outputs.should_run == 'true' && success()
         uses: actions/upload-artifact@v4
         with:
           name: shopping-feed-output
@@ -113,7 +114,7 @@ jobs:
             data/output/*.json
 
       - name: Save AI cache
-        if: steps.prague_time.outputs.should_run == 'true' && hashFiles('data/cache.json') != ''
+        if: steps.prague_time.outputs.should_run == 'true' && hashFiles('data/cache.json') != '' && success()
         uses: actions/cache/save@v4
         with:
           path: data/cache.json
@@ -150,3 +151,18 @@ jobs:
         if: steps.prague_time.outputs.should_run == 'true'
         id: deploy
         uses: actions/deploy-pages@v4
+
+      - name: Send e-mail report
+        if: always() && steps.prague_time.outputs.should_run == 'true'
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          REPORT_EMAIL_FROM: ${{ secrets.REPORT_EMAIL_FROM }}
+          REPORT_EMAIL_TO: lholer@seznam.cz
+          RUN_REPORT_PATH: data/output/feed_run_report.json
+          QA_REPORT_PATH: data/output/feed_qa_report.json
+          WORKFLOW_STATUS: ${{ job.status }}
+        run: |
+          python scripts/send_workflow_email.py

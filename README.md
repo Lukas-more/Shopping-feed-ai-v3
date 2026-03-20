@@ -43,6 +43,7 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - V GitHub repozitari je potreba nastavit secret `FEED_URL` s realnou URL vstupniho XML feedu.
 - Secret `OPENAI_API_KEY` je volitelny. Kdyz nebude nastaveny, workflow i tak vygeneruje XML feed a auditni artifacty, jen bez AI optimalizace.
 - AI cache z `data/cache.json` se v GitHub Actions obnovuje a uklada mezi behy, aby se stejne produkty znovu neposilaly do OpenAI.
+- E-mail reporting po kazdem behu vyzaduje secrets `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` a volitelne `REPORT_EMAIL_FROM`.
 - Rucni spusteni: GitHub `Actions` -> `Generate Feed` -> `Run workflow`.
 
 ## GitHub Pages
@@ -66,3 +67,10 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - V Actions logu a v JSON vystupu uvidis `cache_hits`, `cache_misses`, `ai_candidates`, `ai_calls`, `ai_skipped_missing_key` a `ai_skipped_due_limit`.
 - Ochranny limit lze nastavit pres GitHub Actions environment variable nebo local env `MAX_AI_PRODUCTS`.
 - Bez zmen produktu a bez zmen relevantni AI konfigurace by dalsi beh mel byt vyrazne levnejsi nez bootstrap prvni naplneni cache.
+
+## E-mail reporting
+- Po kazdem behu workflow se odesila e-mail report na `lholer@seznam.cz`.
+- Pro SMTP nastav v GitHub `Settings` -> `Secrets and variables` -> `Actions` tyto secrets: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`.
+- Volitelne muzes nastavit `REPORT_EMAIL_FROM`, jinak se pouzije `SMTP_USERNAME`.
+- Success report i failure report obsahuji maximum dostupnych provoznich metrik: status, cas reportu, products total, AI calls, cache hits, cache misses, `count_title_too_long`, token usage, USD cost, odkaz na `feed.xml` a odkaz na konkretni workflow run.
+- Token usage a USD cost se berou z `feed_run_report.json`, ktery pipeline uklada do `data/output/`.
