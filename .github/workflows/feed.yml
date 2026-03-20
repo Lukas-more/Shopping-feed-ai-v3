@@ -158,7 +158,8 @@ jobs:
           has_api_key = bool(os.getenv("OPENAI_API_KEY", "").strip())
           explicit_max = bool(os.getenv("MAX_AI_PRODUCTS", "").strip())
           safety_threshold = int(os.getenv("AI_SAFETY_MAX_SELECTED", "100") or "100")
-          enforce_safety = os.getenv("AI_ENFORCE_SAFETY", "").strip().lower() == "true"
+          enforce_raw = os.getenv("AI_ENFORCE_SAFETY", "").strip().lower()
+          enforce_safety = enforce_raw != "false"
           ai_selected = int(report.get("ai_selected_count", 0) or 0)
           cache_misses = int(report.get("cache_misses", 0) or 0)
 
