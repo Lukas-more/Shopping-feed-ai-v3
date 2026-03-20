@@ -22,6 +22,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      CACHE_KEY_PREFIX: shopping-feed-ai-cache-${{ github.ref_name }}-
+      MAX_AI_PRODUCTS: ${{ vars.MAX_AI_PRODUCTS }}
 
     steps:
       - name: Check out repository
@@ -52,15 +55,47 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Inspect cache before restore
+        if: steps.prague_time.outputs.should_run == 'true'
+        shell: bash
+        run: |
+          mkdir -p data
+          if [ -f data/cache.json ]; then
+            echo "Cache exists before restore: true"
+            wc -c data/cache.json
+          else
+            echo "Cache exists before restore: false"
+          fi
+          echo "Cache key prefix: ${CACHE_KEY_PREFIX}"
+
       - name: Restore AI cache
         if: steps.prague_time.outputs.should_run == 'true'
         id: ai_cache_restore
         uses: actions/cache/restore@v4
         with:
           path: data/cache.json
-          key: shopping-feed-ai-cache-${{ github.ref_name }}-${{ github.run_id }}
+          key: ${{ env.CACHE_KEY_PREFIX }}${{ github.run_id }}
           restore-keys: |
-            shopping-feed-ai-cache-${{ github.ref_name }}-
+            ${{ env.CACHE_KEY_PREFIX }}
+
+      - name: Inspect cache after restore
+        if: steps.prague_time.outputs.should_run == 'true'
+        id: cache_restore_state
+        shell: bash
+        run: |
+          echo "cache_hit_output=${{ steps.ai_cache_restore.outputs.cache-hit }}"
+          echo "cache_primary_key=${{ steps.ai_cache_restore.outputs.cache-primary-key }}"
+          echo "cache_matched_key=${{ steps.ai_cache_restore.outputs.cache-matched-key }}"
+          if [ -f data/cache.json ]; then
+            echo "cache_restored=true" >> "$GITHUB_OUTPUT"
+            echo "cache_bytes=$(wc -c < data/cache.json)" >> "$GITHUB_OUTPUT"
+            echo "Cache exists after restore: true"
+            wc -c data/cache.json
+          else
+            echo "cache_restored=false" >> "$GITHUB_OUTPUT"
+            echo "cache_bytes=0" >> "$GITHUB_OUTPUT"
+            echo "Cache exists after restore: false"
+          fi
 
       - name: Install dependencies
         if: steps.prague_time.outputs.should_run == 'true'
@@ -101,6 +136,65 @@ jobs:
         run: |
           python -m src.core.pipeline --settings config/settings.runtime.json
 
+      - name: Save AI cache
+        if: steps.prague_time.outputs.should_run == 'true' && hashFiles('data/cache.json') != '' && success()
+        id: ai_cache_save
+        uses: actions/cache/save@v4
+        with:
+          path: data/cache.json
+          key: ${{ env.CACHE_KEY_PREFIX }}${{ github.run_id }}
+
+      - name: Inspect cache after save
+        if: steps.prague_time.outputs.should_run == 'true' && success()
+        id: cache_save_state
+        shell: bash
+        run: |
+          if [ -f data/cache.json ]; then
+            echo "cache_saved=true" >> "$GITHUB_OUTPUT"
+            echo "cache_bytes=$(wc -c < data/cache.json)" >> "$GITHUB_OUTPUT"
+            echo "Cache exists after save: true"
+            wc -c data/cache.json
+          else
+            echo "cache_saved=false" >> "$GITHUB_OUTPUT"
+            echo "cache_bytes=0" >> "$GITHUB_OUTPUT"
+            echo "Cache exists after save: false"
+          fi
+
+      - name: Enrich run report with workflow cache metadata
+        if: steps.prague_time.outputs.should_run == 'true' && success()
+        shell: bash
+        env:
+          CACHE_RESTORED: ${{ steps.cache_restore_state.outputs.cache_restored }}
+          CACHE_RESTORED_BYTES: ${{ steps.cache_restore_state.outputs.cache_bytes }}
+          CACHE_SAVED: ${{ steps.cache_save_state.outputs.cache_saved }}
+          CACHE_SAVED_BYTES: ${{ steps.cache_save_state.outputs.cache_bytes }}
+          CACHE_KEY: ${{ env.CACHE_KEY_PREFIX }}${{ github.run_id }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path("data/output/feed_run_report.json")
+          if not path.exists():
+              raise SystemExit("feed_run_report.json not found")
+
+          payload = json.loads(path.read_text(encoding="utf-8"))
+          payload["cache_restored"] = os.getenv("CACHE_RESTORED") == "true"
+          payload["cache_restored_bytes"] = int(os.getenv("CACHE_RESTORED_BYTES", "0") or "0")
+          payload["cache_saved"] = os.getenv("CACHE_SAVED") == "true"
+          payload["cache_saved_bytes"] = int(os.getenv("CACHE_SAVED_BYTES", "0") or "0")
+          payload["cache_key"] = os.getenv("CACHE_KEY", "")
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(json.dumps({
+              "cache_restored": payload["cache_restored"],
+              "cache_saved": payload["cache_saved"],
+              "cache_key": payload["cache_key"],
+              "cache_restored_bytes": payload["cache_restored_bytes"],
+              "cache_saved_bytes": payload["cache_saved_bytes"],
+          }, ensure_ascii=False))
+          PY
+
       - name: Upload feed artifacts
         if: steps.prague_time.outputs.should_run == 'true' && success()
         uses: actions/upload-artifact@v4
@@ -112,13 +206,6 @@ jobs:
             data/output/*.xml
             data/output/*.csv
             data/output/*.json
-
-      - name: Save AI cache
-        if: steps.prague_time.outputs.should_run == 'true' && hashFiles('data/cache.json') != '' && success()
-        uses: actions/cache/save@v4
-        with:
-          path: data/cache.json
-          key: shopping-feed-ai-cache-${{ github.ref_name }}-${{ github.run_id }}
 
       - name: Configure GitHub Pages
         if: steps.prague_time.outputs.should_run == 'true'

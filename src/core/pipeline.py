@@ -57,7 +57,7 @@ def _cache_context_key(settings: dict, template_key: str, expected_output_tokens
 def _resolve_max_ai_products(settings: dict) -> int | None:
     raw_value = os.getenv("MAX_AI_PRODUCTS", settings.get("max_ai_products", ""))
     if raw_value in ("", None):
-        return None
+        return 50
     try:
         limit = int(raw_value)
     except (TypeError, ValueError) as exc:
@@ -152,6 +152,11 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
     actual = UsageCost()
     cache_hits = 0
     cache_misses = 0
+    cache_miss_reasons = {
+        "missing_entry": 0,
+        "hash_changed": 0,
+        "context_changed": 0,
+    }
     active_products = 0
     skipped_inactive = 0
     ai_candidates = 0
@@ -165,10 +170,11 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
         h = product_hash(p)
         active = is_active_for_ai(p, int(settings.get("delivery_date_active_max", 1)))
 
+        cached_entry = cache.get(p.item_id)
         if (
-            p.item_id in cache
-            and cache[p.item_id].get("hash") == h
-            and cache[p.item_id].get("context") == cache_context
+            cached_entry
+            and cached_entry.get("hash") == h
+            and cached_entry.get("context") == cache_context
         ):
             cached_data = dict(cache[p.item_id].get("data", {}))
             cached_data["_ai_used"] = False
@@ -178,6 +184,12 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
             continue
 
         cache_misses += 1
+        if not cached_entry:
+            cache_miss_reasons["missing_entry"] += 1
+        elif cached_entry.get("hash") != h:
+            cache_miss_reasons["hash_changed"] += 1
+        else:
+            cache_miss_reasons["context_changed"] += 1
 
         if not active:
             optimized_map.setdefault(p.item_id, {})
@@ -288,6 +300,7 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
         "cache_misses": cache_misses,
         "products_skipped_inactive": skipped_inactive,
         "products_needing_refresh": active_products,
+        "ai_selected_count": ai_candidates,
         "ai_candidates": ai_candidates,
         "ai_attempted": ai_attempted,
         "ai_calls": ai_calls,
@@ -295,6 +308,7 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
         "ai_skipped_missing_key": ai_skipped_missing_key,
         "ai_skipped_due_limit": ai_skipped_due_limit,
         "max_ai_products": max_ai_products,
+        "cache_miss_reasons": cache_miss_reasons,
         "estimated_runtime_seconds": estimated_seconds,
         "estimated_runtime_minutes_range": f"{estimated_minutes_low}-{estimated_minutes_high}",
         "estimated_input_tokens": estimated.input_tokens,
@@ -323,6 +337,10 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
     run_stats["audit_csv_path"] = str(final_audit_csv_path)
     run_stats["run_report_path"] = str(run_report_path)
     run_stats["warnings"] = warnings
+    if ai_skipped_due_limit:
+        warnings.append(
+            f"Dosazen limit MAX_AI_PRODUCTS={max_ai_products}; cast produktu byla preskocena bez AI."
+        )
     final_run_report_path, run_report_warning = _write_json_with_fallback(run_report_path, run_stats)
     if run_report_warning:
         warnings.append(run_report_warning)
@@ -333,6 +351,7 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
         f"products_total={run_stats['products_total']} "
         f"cache_hits={cache_hits} "
         f"cache_misses={cache_misses} "
+        f"cache_miss_reasons={json.dumps(cache_miss_reasons, ensure_ascii=False)} "
         f"skipped_inactive={skipped_inactive} "
         f"ai_candidates={ai_candidates} "
         f"ai_attempted={ai_attempted} "

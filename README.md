@@ -61,12 +61,13 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - Po uspesnem dobehu over verejnou URL `https://lukas-more.github.io/Shopping-feed-ai-v3/feed.xml`.
 
 ## AI cache
-- Hash produktu se pocita z `item_id`, `title`, vycisteneho `description_html`, `category_text` a `variant_text`.
+- Hash produktu se pocita z `item_id`, `title`, vycisteneho `description_html`, `category_text` a normalizovanych variantnich parametru.
 - Cache je v `data/cache.json`.
 - Cache hit nastane jen kdyz sedi hash produktu i cache context (model + prompt/template nastaveni).
-- V Actions logu a v JSON vystupu uvidis `cache_hits`, `cache_misses`, `ai_candidates`, `ai_calls`, `ai_skipped_missing_key` a `ai_skipped_due_limit`.
-- Ochranny limit lze nastavit pres GitHub Actions environment variable nebo local env `MAX_AI_PRODUCTS`.
+- V Actions logu a v `feed_run_report.json` uvidis `cache_hits`, `cache_misses`, `cache_miss_reasons`, `ai_selected_count`, `ai_calls`, `actual_input_tokens`, `actual_output_tokens`, `actual_cost_usd`, `cache_restored`, `cache_saved` a `cache_key`.
+- Ochranny limit lze nastavit pres GitHub Actions variable nebo local env `MAX_AI_PRODUCTS`; kdyz neni nastaveny, pipeline pouzije konzervativni default `50`.
 - Bez zmen produktu a bez zmen relevantni AI konfigurace by dalsi beh mel byt vyrazne levnejsi nez bootstrap prvni naplneni cache.
+- Po dalsim runu zkontroluj v Actions logu kroky `Inspect cache after restore`, `Inspect cache after save` a v artifactu soubor `feed_run_report.json`.
 
 ## E-mail reporting
 - Po kazdem behu workflow se odesila e-mail report na `lholer@seznam.cz`.
