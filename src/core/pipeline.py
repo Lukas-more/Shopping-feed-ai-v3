@@ -57,7 +57,7 @@ def _cache_context_key(settings: dict, template_key: str, expected_output_tokens
 def _resolve_max_ai_products(settings: dict) -> int | None:
     raw_value = os.getenv("MAX_AI_PRODUCTS", settings.get("max_ai_products", ""))
     if raw_value in ("", None):
-        return 50
+        return None
     try:
         limit = int(raw_value)
     except (TypeError, ValueError) as exc:
@@ -141,6 +141,7 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
 
     cache_context = _cache_context_key(settings, template_key, expected_output_tokens)
     max_ai_products = _resolve_max_ai_products(settings)
+    max_ai_products_explicit = max_ai_products is not None
 
     optimizer = OpenAIOptimizer(
         api_key=api_key,
@@ -308,6 +309,7 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
         "ai_skipped_missing_key": ai_skipped_missing_key,
         "ai_skipped_due_limit": ai_skipped_due_limit,
         "max_ai_products": max_ai_products,
+        "max_ai_products_explicit": max_ai_products_explicit,
         "cache_miss_reasons": cache_miss_reasons,
         "estimated_runtime_seconds": estimated_seconds,
         "estimated_runtime_minutes_range": f"{estimated_minutes_low}-{estimated_minutes_high}",
@@ -359,7 +361,8 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
         f"ai_errors={ai_errors} "
         f"ai_skipped_missing_key={ai_skipped_missing_key} "
         f"ai_skipped_due_limit={ai_skipped_due_limit} "
-        f"max_ai_products={max_ai_products}"
+        f"max_ai_products={max_ai_products} "
+        f"max_ai_products_explicit={max_ai_products_explicit}"
     )
     return run_stats
 

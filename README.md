@@ -65,7 +65,9 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - Cache je v `data/cache.json`.
 - Cache hit nastane jen kdyz sedi hash produktu i cache context (model + prompt/template nastaveni).
 - V Actions logu a v `feed_run_report.json` uvidis `cache_hits`, `cache_misses`, `cache_miss_reasons`, `ai_selected_count`, `ai_calls`, `actual_input_tokens`, `actual_output_tokens`, `actual_cost_usd`, `cache_restored`, `cache_saved` a `cache_key`.
-- Ochranny limit lze nastavit pres GitHub Actions variable nebo local env `MAX_AI_PRODUCTS`; kdyz neni nastaveny, pipeline pouzije konzervativni default `50`.
+- `MAX_AI_PRODUCTS` je volitelny explicitni limit pres GitHub Actions variable nebo local env; bez explicitniho nastaveni se zadny tichy default nepouziva.
+- Kdyz se cache neobnovi (`cache_restored=false`) a je aktivni OpenAI API klic, workflow zastavi AI cast fail-safe chovanim jeste pred ostrym AI during.
+- Kdyz preflight ukaze necekane vysoky `ai_selected_count` nebo `cache_misses` a neni nastaveny explicitni `MAX_AI_PRODUCTS`, workflow aktivuje safety stop s jasnou chybou.
 - Bez zmen produktu a bez zmen relevantni AI konfigurace by dalsi beh mel byt vyrazne levnejsi nez bootstrap prvni naplneni cache.
 - Po dalsim runu zkontroluj v Actions logu kroky `Inspect cache after restore`, `Inspect cache after save` a v artifactu soubor `feed_run_report.json`.
 
