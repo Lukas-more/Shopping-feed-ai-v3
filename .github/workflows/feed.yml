@@ -12,9 +12,7 @@ concurrency:
 on:
   workflow_dispatch:
   schedule:
-    # Two UTC schedules cover both CET and CEST; a Prague-time gate below allows only 05:30 local time.
-    - cron: "30 3 * * *"
-    - cron: "30 4 * * *"
+    - cron: "0 4 * * *"
 
 jobs:
   build-feed:
@@ -32,33 +30,12 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Check Prague runtime window
-        id: prague_time
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          current_time=$(TZ=Europe/Prague date +%H:%M)
-          echo "Current Europe/Prague time: $current_time"
-
-          if [ "$current_time" = "05:30" ]; then
-            echo "should_run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "should_run=false" >> "$GITHUB_OUTPUT"
-            echo "Skipping scheduled run outside 05:30 Europe/Prague."
-          fi
-
       - name: Set up Python
-        if: steps.prague_time.outputs.should_run == 'true'
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Inspect cache before restore
-        if: steps.prague_time.outputs.should_run == 'true'
         shell: bash
         run: |
           mkdir -p data
@@ -71,7 +48,6 @@ jobs:
           echo "Cache key prefix: ${CACHE_KEY_PREFIX}"
 
       - name: Restore AI cache
-        if: steps.prague_time.outputs.should_run == 'true'
         id: ai_cache_restore
         uses: actions/cache/restore@v4
         with:
@@ -81,7 +57,6 @@ jobs:
             ${{ env.CACHE_KEY_PREFIX }}
 
       - name: Inspect cache after restore
-        if: steps.prague_time.outputs.should_run == 'true'
         id: cache_restore_state
         shell: bash
         run: |
@@ -100,13 +75,11 @@ jobs:
           fi
 
       - name: Install dependencies
-        if: steps.prague_time.outputs.should_run == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
       - name: Prepare runtime settings
-        if: steps.prague_time.outputs.should_run == 'true'
         env:
           FEED_URL: ${{ secrets.FEED_URL }}
         run: |
@@ -131,14 +104,12 @@ jobs:
           PY
 
       - name: Preflight AI selection
-        if: steps.prague_time.outputs.should_run == 'true'
         env:
           OPENAI_API_KEY: ""
         run: |
           python -m src.core.pipeline --settings config/settings.runtime.json --dry-run
 
       - name: Enforce AI safety
-        if: steps.prague_time.outputs.should_run == 'true'
         id: ai_safety
         shell: bash
         env:
@@ -211,7 +182,7 @@ jobs:
           PY
 
       - name: Generate feed
-        if: steps.prague_time.outputs.should_run == 'true' && steps.ai_safety.outputs.ai_allowed == 'true'
+        if: steps.ai_safety.outputs.ai_allowed == 'true'
         id: generate_feed
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -219,7 +190,7 @@ jobs:
           python -m src.core.pipeline --settings config/settings.runtime.json
 
       - name: Save AI cache
-        if: steps.prague_time.outputs.should_run == 'true' && hashFiles('data/cache.json') != '' && success()
+        if: hashFiles('data/cache.json') != '' && success()
         id: ai_cache_save
         uses: actions/cache/save@v4
         with:
@@ -227,7 +198,7 @@ jobs:
           key: ${{ env.CACHE_KEY_PREFIX }}${{ github.run_id }}
 
       - name: Inspect cache after save
-        if: steps.prague_time.outputs.should_run == 'true' && success()
+        if: success()
         id: cache_save_state
         shell: bash
         run: |
@@ -243,7 +214,7 @@ jobs:
           fi
 
       - name: Enrich run report with workflow cache metadata
-        if: steps.prague_time.outputs.should_run == 'true' && success()
+        if: success()
         shell: bash
         env:
           CACHE_RESTORED: ${{ steps.cache_restore_state.outputs.cache_restored }}
@@ -287,7 +258,7 @@ jobs:
           PY
 
       - name: Upload feed artifacts
-        if: steps.prague_time.outputs.should_run == 'true' && success()
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: shopping-feed-output
@@ -299,11 +270,11 @@ jobs:
             data/output/*.json
 
       - name: Configure GitHub Pages
-        if: steps.prague_time.outputs.should_run == 'true'
+        if: success()
         uses: actions/configure-pages@v5
 
       - name: Prepare Pages content
-        if: steps.prague_time.outputs.should_run == 'true'
+        if: success()
         run: |
           mkdir -p site
           cp data/output/optimized_feed.xml site/feed.xml
@@ -320,18 +291,18 @@ jobs:
           touch site/.nojekyll
 
       - name: Upload Pages artifact
-        if: steps.prague_time.outputs.should_run == 'true'
+        if: success()
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
       - name: Deploy to GitHub Pages
-        if: steps.prague_time.outputs.should_run == 'true'
+        if: success()
         id: deploy
         uses: actions/deploy-pages@v4
 
       - name: Send e-mail report
-        if: always() && steps.prague_time.outputs.should_run == 'true'
+        if: always()
         env:
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
