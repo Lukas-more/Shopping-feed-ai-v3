@@ -39,7 +39,7 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 ## GitHub Actions
 - Workflow je v `.github/workflows/feed.yml`.
 - Spousti se rucne pres `workflow_dispatch` a take 1x denne.
-- Automaticky beh je nastaven na pevny cas `03:12 UTC`, tj. zhruba `04:12` v zime a `05:12` v lete v `Europe/Prague`.
+- Automaticky beh je nastaven na dva pevne casy `02:12 UTC` a `03:12 UTC`, tj. zhruba `03:12/04:12` v zime a `04:12/05:12` v lete v `Europe/Prague`.
 - V GitHub repozitari je potreba nastavit secret `FEED_URL` s realnou URL vstupniho XML feedu.
 - Secret `OPENAI_API_KEY` je volitelny. Kdyz nebude nastaveny, workflow i tak vygeneruje XML feed a auditni artifacty, jen bez AI optimalizace.
 - AI cache z `data/cache.json` se v GitHub Actions obnovuje a uklada mezi behy, aby se stejne produkty znovu neposilaly do OpenAI.

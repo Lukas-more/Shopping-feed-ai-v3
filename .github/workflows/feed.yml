@@ -12,6 +12,7 @@ concurrency:
 on:
   workflow_dispatch:
   schedule:
+    - cron: "12 2 * * *"
     - cron: "12 3 * * *"
 
 jobs:
