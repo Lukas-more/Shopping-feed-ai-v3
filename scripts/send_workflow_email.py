@@ -60,6 +60,11 @@ def build_body(status: str, run_report: dict, qa_report: dict) -> str:
     cache_hits = run_report.get("cache_hits")
     cache_misses = run_report.get("cache_misses")
     title_too_long = qa_report.get("count_title_too_long")
+    trigger_type = run_report.get("trigger_type", os.getenv("GITHUB_EVENT_NAME", "workflow_dispatch"))
+    run_start_utc = run_report.get("run_start_utc")
+    run_start_prague = run_report.get("run_start_prague")
+    run_end_utc = run_report.get("run_end_utc")
+    run_end_prague = run_report.get("run_end_prague")
     input_tokens = run_report.get("actual_input_tokens")
     output_tokens = run_report.get("actual_output_tokens")
     total_tokens = None
@@ -76,7 +81,12 @@ def build_body(status: str, run_report: dict, qa_report: dict) -> str:
 
     lines = [
         f"Status: {status}",
+        f"Trigger type: {_format_value(trigger_type)}",
         f"Report time: {now_prague}",
+        f"Run start UTC: {_format_value(run_start_utc)}",
+        f"Run start Prague: {_format_value(run_start_prague)}",
+        f"Run end UTC: {_format_value(run_end_utc)}",
+        f"Run end Prague: {_format_value(run_end_prague)}",
         f"Products total: {_format_value(products_total)}",
         f"AI calls: {_format_value(ai_calls)}",
         f"Cache hits: {_format_value(cache_hits)}",

@@ -38,13 +38,34 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - Pokud nepoužiješ OpenAI klíč, aplikace umí aspoň analyzovat feed a spočítat odhad produktů/ceny.
 ## GitHub Actions
 - Workflow je v `.github/workflows/feed.yml`.
-- Spousti se rucne pres `workflow_dispatch` a take 1x denne.
-- Automaticky beh je nastaven na dva pevne casy `02:12 UTC` a `03:12 UTC`, tj. zhruba `03:12/04:12` v zime a `04:12/05:12` v lete v `Europe/Prague`.
+- Workflow se spousti rucne nebo externe pres `workflow_dispatch`.
 - V GitHub repozitari je potreba nastavit secret `FEED_URL` s realnou URL vstupniho XML feedu.
 - Secret `OPENAI_API_KEY` je volitelny. Kdyz nebude nastaveny, workflow i tak vygeneruje XML feed a auditni artifacty, jen bez AI optimalizace.
 - AI cache z `data/cache.json` se v GitHub Actions obnovuje a uklada mezi behy, aby se stejne produkty znovu neposilaly do OpenAI.
 - E-mail reporting po kazdem behu vyzaduje secrets `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` a volitelne `REPORT_EMAIL_FROM`.
 - Rucni spusteni: GitHub `Actions` -> `Generate Feed` -> `Run workflow`.
+
+## External trigger
+- Workflow se ted spousti externe pres GitHub REST API `workflow_dispatch`, ne pres GitHub `schedule`.
+- Workflow file musi byt na default branch repozitare.
+- Minimalni vstupy pro externi trigger jsou:
+  - `owner`
+  - `repo`
+  - workflow filename, zde `feed.yml`
+  - branch `ref`
+  - GitHub token s opravnenim workflow spustit
+- Endpoint:
+  - `POST https://api.github.com/repos/{owner}/{repo}/actions/workflows/feed.yml/dispatches`
+- Ukazkovy `curl`:
+```bash
+curl -X POST \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
+  https://api.github.com/repos/Lukas-more/Shopping-feed-ai-v3/actions/workflows/feed.yml/dispatches \
+  -d '{"ref":"main"}'
+```
+- Doporuceni: spoustej externim schedulerem vyrazne pred 07:00, napr. kolem `02:17 UTC`.
+- Externi scheduler je zvolen kvuli vyssi spolehlivosti oproti GitHub `schedule`.
 
 ## GitHub Pages
 - Workflow po vygenerovani feedu publikuje `data/output/optimized_feed.xml` na GitHub Pages jako stabilni `feed.xml`.

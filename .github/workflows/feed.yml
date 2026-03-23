@@ -6,14 +6,12 @@ permissions:
   id-token: write
 
 concurrency:
+  # Serialize feed runs so duplicate external triggers do not overlap, but keep the first valid run alive.
   group: github-pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "12 2 * * *"
-    - cron: "12 3 * * *"
 
 jobs:
   build-feed:
@@ -30,6 +28,18 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Capture workflow start times
+        id: run_start
+        shell: bash
+        run: |
+          utc_now=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          prague_now=$(TZ=Europe/Prague date +"%Y-%m-%d %H:%M:%S %Z")
+          echo "run_start_utc=${utc_now}" >> "$GITHUB_OUTPUT"
+          echo "run_start_prague=${prague_now}" >> "$GITHUB_OUTPUT"
+          echo "trigger_type=${{ github.event_name }}" >> "$GITHUB_OUTPUT"
+          echo "Workflow start UTC: ${utc_now}"
+          echo "Workflow start Prague: ${prague_now}"
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -226,16 +236,23 @@ jobs:
           AI_SAFETY_STOP: ${{ steps.ai_safety.outputs.ai_safety_stop }}
           AI_SAFETY_REASON: ${{ steps.ai_safety.outputs.ai_safety_reason }}
           AI_SAFETY_ENFORCED: ${{ steps.ai_safety.outputs.ai_safety_enforced }}
+          RUN_START_UTC: ${{ steps.run_start.outputs.run_start_utc }}
+          RUN_START_PRAGUE: ${{ steps.run_start.outputs.run_start_prague }}
+          TRIGGER_TYPE: ${{ steps.run_start.outputs.trigger_type }}
         run: |
           python - <<'PY'
           import json
           import os
+          from datetime import datetime
           from pathlib import Path
+          from zoneinfo import ZoneInfo
 
           path = Path("data/output/feed_run_report.json")
           if not path.exists():
               raise SystemExit("feed_run_report.json not found")
 
+          utc_end = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S UTC")
+          prague_end = datetime.now(ZoneInfo("Europe/Prague")).strftime("%Y-%m-%d %H:%M:%S %Z")
           payload = json.loads(path.read_text(encoding="utf-8"))
           payload["cache_restored"] = os.getenv("CACHE_RESTORED") == "true"
           payload["cache_restored_bytes"] = int(os.getenv("CACHE_RESTORED_BYTES", "0") or "0")
@@ -245,8 +262,18 @@ jobs:
           payload["ai_safety_stop"] = os.getenv("AI_SAFETY_STOP") == "true"
           payload["ai_safety_reason"] = os.getenv("AI_SAFETY_REASON", "")
           payload["ai_safety_enforced"] = os.getenv("AI_SAFETY_ENFORCED") == "true"
+          payload["run_start_utc"] = os.getenv("RUN_START_UTC", "")
+          payload["run_start_prague"] = os.getenv("RUN_START_PRAGUE", "")
+          payload["run_end_utc"] = utc_end
+          payload["run_end_prague"] = prague_end
+          payload["trigger_type"] = os.getenv("TRIGGER_TYPE", "workflow_dispatch")
           path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
           print(json.dumps({
+              "trigger_type": payload["trigger_type"],
+              "run_start_utc": payload["run_start_utc"],
+              "run_start_prague": payload["run_start_prague"],
+              "run_end_utc": payload["run_end_utc"],
+              "run_end_prague": payload["run_end_prague"],
               "cache_restored": payload["cache_restored"],
               "cache_saved": payload["cache_saved"],
               "cache_key": payload["cache_key"],
@@ -256,6 +283,53 @@ jobs:
               "ai_safety_reason": payload["ai_safety_reason"],
               "ai_safety_enforced": payload["ai_safety_enforced"],
           }, ensure_ascii=False))
+          PY
+
+      - name: Write failure run report
+        if: failure()
+        shell: bash
+        env:
+          RUN_START_UTC: ${{ steps.run_start.outputs.run_start_utc }}
+          RUN_START_PRAGUE: ${{ steps.run_start.outputs.run_start_prague }}
+          TRIGGER_TYPE: ${{ steps.run_start.outputs.trigger_type }}
+          CACHE_RESTORED: ${{ steps.cache_restore_state.outputs.cache_restored }}
+          CACHE_RESTORED_BYTES: ${{ steps.cache_restore_state.outputs.cache_bytes }}
+          CACHE_KEY: ${{ env.CACHE_KEY_PREFIX }}${{ github.run_id }}
+          AI_SAFETY_STOP: ${{ steps.ai_safety.outputs.ai_safety_stop }}
+          AI_SAFETY_REASON: ${{ steps.ai_safety.outputs.ai_safety_reason }}
+          AI_SAFETY_ENFORCED: ${{ steps.ai_safety.outputs.ai_safety_enforced }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from datetime import datetime
+          from pathlib import Path
+          from zoneinfo import ZoneInfo
+
+          output_dir = Path("data/output")
+          output_dir.mkdir(parents=True, exist_ok=True)
+          path = output_dir / "feed_run_report.json"
+          payload = {}
+          if path.exists():
+              try:
+                  payload = json.loads(path.read_text(encoding="utf-8"))
+              except json.JSONDecodeError:
+                  payload = {}
+
+          payload["status"] = "failed"
+          payload["run_start_utc"] = os.getenv("RUN_START_UTC", "")
+          payload["run_start_prague"] = os.getenv("RUN_START_PRAGUE", "")
+          payload["run_end_utc"] = datetime.now(ZoneInfo("UTC")).strftime("%Y-%m-%d %H:%M:%S UTC")
+          payload["run_end_prague"] = datetime.now(ZoneInfo("Europe/Prague")).strftime("%Y-%m-%d %H:%M:%S %Z")
+          payload["trigger_type"] = os.getenv("TRIGGER_TYPE", "workflow_dispatch")
+          payload["cache_restored"] = os.getenv("CACHE_RESTORED") == "true"
+          payload["cache_restored_bytes"] = int(os.getenv("CACHE_RESTORED_BYTES", "0") or "0")
+          payload["cache_key"] = os.getenv("CACHE_KEY", "")
+          payload["ai_safety_stop"] = os.getenv("AI_SAFETY_STOP") == "true"
+          payload["ai_safety_reason"] = os.getenv("AI_SAFETY_REASON", "")
+          payload["ai_safety_enforced"] = os.getenv("AI_SAFETY_ENFORCED") == "true"
+          path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+          print(json.dumps(payload, ensure_ascii=False))
           PY
 
       - name: Upload feed artifacts
