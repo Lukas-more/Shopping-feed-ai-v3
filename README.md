@@ -12,7 +12,7 @@ Lokální aplikace pro převod a optimalizaci Heureka/Shoptet feedu do Google Me
   - `g:product_type`
   - `g:custom_label_3`
   - `g:custom_label_4`
-- `g:custom_label_0` = marže (zatím fixně 40 %)
+- `g:custom_label_0` = marzovy bucket (`m-x`, `m-s`, `m-m`, `m-l`, `m-xl`) podle Shoptet exportu nakupnich cen
 - `g:custom_label_1` = cenový bucket podle percentilů
 - používá cache podle hash změn produktu
 - ukazuje odhad ceny před během i skutečnou cenu po doběhu
@@ -40,6 +40,7 @@ python -m src.core.pipeline --settings config/settings.example.json --api-key TV
 - Workflow je v `.github/workflows/feed.yml`.
 - Workflow se spousti rucne nebo externe pres `workflow_dispatch`.
 - V GitHub repozitari je potreba nastavit secret `FEED_URL` s realnou URL vstupniho XML feedu.
+- Pro marzove buckety je volitelny secret `SHOPTET_COSTS_URL` s URL CSV exportu nakupnich cen ze Shoptetu. Kdyz chybi nebo stazeni selze, feed se i tak vygeneruje a `g:custom_label_0` spadne na `m-x`.
 - Secret `OPENAI_API_KEY` je volitelny. Kdyz nebude nastaveny, workflow i tak vygeneruje XML feed a auditni artifacty, jen bez AI optimalizace.
 - AI cache z `data/cache.json` se v GitHub Actions obnovuje a uklada mezi behy, aby se stejne produkty znovu neposilaly do OpenAI.
 - E-mail reporting po kazdem behu vyzaduje secrets `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` a volitelne `REPORT_EMAIL_FROM`.
@@ -77,6 +78,7 @@ curl -X POST \
 ## Prvni spusteni checklist
 - V GitHub repozitari otevri `Settings` -> `Secrets and variables` -> `Actions` a zaloz secret `FEED_URL`.
 - Jako hodnotu `FEED_URL` nastav: `https://www.plaza.cz/heureka/export/products.xml?hash=X4SOE1liV0PnOQmeqEid2jX`
+- Pokud chces marzove buckety v `g:custom_label_0`, pridej jeste secret `SHOPTET_COSTS_URL`.
 - Otevri `Settings` -> `Pages` a jako source nastav `GitHub Actions`.
 - Otevri `Actions` -> `Generate Feed` -> `Run workflow`.
 - Po uspesnem dobehu over verejnou URL `https://lukas-more.github.io/Shopping-feed-ai-v3/feed.xml`.
@@ -91,6 +93,15 @@ curl -X POST \
 - Kdyz preflight ukaze necekane vysoky `ai_selected_count` nebo `cache_misses` a neni nastaveny explicitni `MAX_AI_PRODUCTS`, workflow aktivuje safety stop s jasnou chybou.
 - Bez zmen produktu a bez zmen relevantni AI konfigurace by dalsi beh mel byt vyrazne levnejsi nez bootstrap prvni naplneni cache.
 - Po dalsim runu zkontroluj v Actions logu kroky `Inspect cache after restore`, `Inspect cache after save` a v artifactu soubor `feed_run_report.json`.
+
+## Purchase prices / marze
+- Workflow umi pri behu stahnout Shoptet CSV export nakupnich cen do docasneho souboru `tmp/purchase_prices.csv`; ten se necommituje do repozitare.
+- CSV ma ocekavane sloupce `code`, `pairCode`, `name`, `price`, `purchasePrice`.
+- Parovani probiha pres `code == g:id`.
+- `purchasePrice` i `price` mohou byt s ceskou desetinnou carkou.
+- Kdyz chybi `purchasePrice`, radek je neplatny nebo produkt v CSV neni, feed zapise `g:custom_label_0 = m-x`.
+- Ostatni labely se pocitaji z marze `price - purchasePrice - 70 - (price * 0.05)` a do feedu se zapisuje jen `m-s`, `m-m`, `m-l` nebo `m-xl`.
+- V logu a `feed_run_report.json` uvidis `products_total`, `purchase_csv_rows_loaded`, `products_with_purchase_price`, `count_custom_label_0_m_x`, `count_custom_label_0_m_s`, `count_custom_label_0_m_m`, `count_custom_label_0_m_l` a `count_custom_label_0_m_xl`.
 
 ## E-mail reporting
 - Po kazdem behu workflow se odesila e-mail report na `lholer@seznam.cz`.

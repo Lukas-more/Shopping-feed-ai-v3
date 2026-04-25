@@ -16,7 +16,7 @@ from src.feed.writer import build_gmc_feed
 from src.feed.audit import build_audit_rows, write_audit_csv
 from src.feed.qa import build_qa_report
 from src.labels.price_bucket import compute_price_buckets
-from src.labels.margin import load_margin_map
+from src.labels.margin import load_purchase_price_labels
 from src.utils.hashing import product_hash
 from src.ai.prompts import load_templates, build_prompt
 from src.ai.client import OpenAIOptimizer, estimate_cost, UsageCost
@@ -116,7 +116,10 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
         raise RuntimeError("Nepodarilo se stahnout vstupni feed. Zkontroluj URL feedu a pripojeni k internetu.") from exc
     products = parse_heureka_feed(feed_xml)
     price_buckets = compute_price_buckets(products)
-    margin_map = load_margin_map(settings.get("margin_csv_path", ""))
+    margin_map, margin_stats = load_purchase_price_labels(
+        products,
+        settings.get("purchase_prices_csv_path", ""),
+    )
 
     cache_path = ROOT / settings.get("cache_path", "data/cache.json")
     cache_path.parent.mkdir(parents=True, exist_ok=True)
@@ -296,6 +299,15 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
 
     run_stats = {
         "products_total": len(products),
+        "purchase_csv_rows_loaded": margin_stats["purchase_csv_rows_loaded"],
+        "purchase_csv_rows_skipped": margin_stats["purchase_csv_rows_skipped"],
+        "products_with_purchase_price": margin_stats["products_with_purchase_price"],
+        "products_missing_purchase_price": margin_stats["products_missing_purchase_price"],
+        "count_custom_label_0_m_x": margin_stats["label_m_x"],
+        "count_custom_label_0_m_s": margin_stats["label_m_s"],
+        "count_custom_label_0_m_m": margin_stats["label_m_m"],
+        "count_custom_label_0_m_l": margin_stats["label_m_l"],
+        "count_custom_label_0_m_xl": margin_stats["label_m_xl"],
         "cache_entries": len(cache),
         "cache_hits": cache_hits,
         "cache_misses": cache_misses,
@@ -351,6 +363,13 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
     print(
         "[RUN SUMMARY] "
         f"products_total={run_stats['products_total']} "
+        f"purchase_csv_rows_loaded={run_stats['purchase_csv_rows_loaded']} "
+        f"products_with_purchase_price={run_stats['products_with_purchase_price']} "
+        f"custom_label_0_m_x={run_stats['count_custom_label_0_m_x']} "
+        f"custom_label_0_m_s={run_stats['count_custom_label_0_m_s']} "
+        f"custom_label_0_m_m={run_stats['count_custom_label_0_m_m']} "
+        f"custom_label_0_m_l={run_stats['count_custom_label_0_m_l']} "
+        f"custom_label_0_m_xl={run_stats['count_custom_label_0_m_xl']} "
         f"cache_hits={cache_hits} "
         f"cache_misses={cache_misses} "
         f"cache_miss_reasons={json.dumps(cache_miss_reasons, ensure_ascii=False)} "

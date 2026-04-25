@@ -12,6 +12,7 @@
   "prompt_template": "default_cz_shopping",
   "custom_prompt": "",
   "margin_csv_path": "",
+  "purchase_prices_csv_path": "",
   "output_path": "data/output/optimized_feed.xml",
   "cache_path": "data/cache.json"
 }

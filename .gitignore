@@ -26,6 +26,7 @@ config/settings.runtime.json
 # Generated data
 data/cache.json
 data/output/
+tmp/
 
 # OS / misc
 .DS_Store

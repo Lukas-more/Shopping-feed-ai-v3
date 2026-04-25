@@ -190,7 +190,7 @@ def build_gmc_feed(products: list[Product], optimized_map: dict, price_buckets: 
             ET.SubElement(ship, gtag("country")).text = "CZ"
             ET.SubElement(ship, gtag("service")).text = d.delivery_id
             ET.SubElement(ship, gtag("price")).text = f"{str(d.price).replace(',', '.')} {currency}"
-        custom_label_0 = margin_map.get(p.item_id, f"margin_{int(default_margin_percent)}")
+        custom_label_0 = margin_map.get(p.item_id, "m-x")
         custom_label_1 = price_buckets.get(p.item_id, "price_unknown")
         data["_final_custom_label_0"] = custom_label_0
         data["_final_custom_label_1"] = custom_label_1

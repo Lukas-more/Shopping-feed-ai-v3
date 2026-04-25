@@ -15,6 +15,7 @@ def build_qa_report(products: list[Product], optimized_map: dict[str, dict], run
     segment_sources = Counter()
     custom_label_3 = Counter()
     custom_label_4 = Counter()
+    custom_label_0 = Counter()
 
     for product in products:
         data = optimized_map.get(product.item_id, {})
@@ -25,6 +26,7 @@ def build_qa_report(products: list[Product], optimized_map: dict[str, dict], run
         segment_source = data.get("_segment_source", "fallback_default")
         final_intent = data.get("_final_search_intent", "")
         final_segment = data.get("_final_segment", "")
+        final_margin_label = data.get("_final_custom_label_0", "")
 
         if not final_title:
             title_empty += 1
@@ -42,6 +44,8 @@ def build_qa_report(products: list[Product], optimized_map: dict[str, dict], run
             custom_label_3[final_intent] += 1
         if final_segment:
             custom_label_4[final_segment] += 1
+        if final_margin_label:
+            custom_label_0[final_margin_label] += 1
 
     return {
         "products_total": run_stats["products_total"],
@@ -58,7 +62,15 @@ def build_qa_report(products: list[Product], optimized_map: dict[str, dict], run
         "count_intent_from_fallback": run_stats["products_total"] - intent_sources.get("ai", 0),
         "count_segment_from_ai": segment_sources.get("ai", 0),
         "count_segment_from_fallback": run_stats["products_total"] - segment_sources.get("ai", 0),
+        "count_custom_label_0_m_x": run_stats["count_custom_label_0_m_x"],
+        "count_custom_label_0_m_s": run_stats["count_custom_label_0_m_s"],
+        "count_custom_label_0_m_m": run_stats["count_custom_label_0_m_m"],
+        "count_custom_label_0_m_l": run_stats["count_custom_label_0_m_l"],
+        "count_custom_label_0_m_xl": run_stats["count_custom_label_0_m_xl"],
+        "purchase_csv_rows_loaded": run_stats["purchase_csv_rows_loaded"],
+        "products_with_purchase_price": run_stats["products_with_purchase_price"],
         "product_type_source_breakdown": dict(product_type_sources),
+        "custom_label_0_breakdown": dict(custom_label_0),
         "custom_label_3_breakdown": dict(custom_label_3),
         "custom_label_4_breakdown": dict(custom_label_4),
         "intent_source_breakdown": dict(intent_sources),

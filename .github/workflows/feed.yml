@@ -46,6 +46,37 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Download Shoptet purchase prices
+        env:
+          SHOPTET_COSTS_URL: ${{ secrets.SHOPTET_COSTS_URL }}
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          from urllib.error import HTTPError, URLError
+          from urllib.request import urlopen
+
+          target = Path("tmp/purchase_prices.csv")
+          target.parent.mkdir(parents=True, exist_ok=True)
+          if target.exists():
+              target.unlink()
+
+          url = os.environ.get("SHOPTET_COSTS_URL", "").strip()
+          if not url:
+              print("SHOPTET_COSTS_URL missing; continuing with fallback m-x labels.")
+              raise SystemExit(0)
+
+          try:
+              with urlopen(url, timeout=90) as response:
+                  payload = response.read()
+          except (HTTPError, URLError, TimeoutError, OSError) as exc:
+              print(f"Purchase prices download failed; continuing with fallback m-x labels. ({type(exc).__name__})")
+              raise SystemExit(0)
+
+          target.write_bytes(payload)
+          print(f"Purchase prices CSV stored temporarily at {target}.")
+          PY
+
       - name: Inspect cache before restore
         shell: bash
         run: |
@@ -105,8 +136,10 @@ jobs:
 
           source = Path("config/settings.example.json")
           target = Path("config/settings.runtime.json")
+          purchase_prices_path = Path("tmp/purchase_prices.csv")
           settings = json.loads(source.read_text(encoding="utf-8"))
           settings["feed_url"] = feed_url
+          settings["purchase_prices_csv_path"] = str(purchase_prices_path) if purchase_prices_path.exists() else ""
           target.write_text(
               json.dumps(settings, ensure_ascii=False, indent=2),
               encoding="utf-8",
