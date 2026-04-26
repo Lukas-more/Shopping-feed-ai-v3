@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from io import StringIO
 from pathlib import Path
 
 from src.core.models import Product
@@ -46,6 +47,17 @@ def _build_default_margin_map(products: list[Product]) -> tuple[dict[str, str], 
     return labels, stats
 
 
+def _load_csv_rows(path: Path) -> list[dict[str, str]]:
+    raw_bytes = path.read_bytes()
+    for encoding in ("utf-8-sig", "utf-8", "cp1250", "iso-8859-2"):
+        try:
+            text = raw_bytes.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        return list(csv.DictReader(StringIO(text)))
+    raise UnicodeDecodeError("purchase_prices_csv", raw_bytes, 0, 1, "Unsupported CSV encoding")
+
+
 def load_purchase_price_labels(products: list[Product], csv_path: str) -> tuple[dict[str, str], dict[str, int]]:
     labels, stats = _build_default_margin_map(products)
     if not csv_path:
@@ -57,22 +69,25 @@ def load_purchase_price_labels(products: list[Product], csv_path: str) -> tuple[
 
     purchase_prices: dict[str, float | None] = {}
 
-    with path.open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
-        for row in reader:
-            code = (row.get("code") or "").strip()
-            if not code:
-                stats["purchase_csv_rows_skipped"] += 1
-                continue
+    try:
+        rows = _load_csv_rows(path)
+    except (OSError, UnicodeDecodeError, csv.Error):
+        return labels, stats
 
-            purchase_price_raw = (row.get("purchasePrice") or "").strip()
-            purchase_price = _parse_decimal(purchase_price_raw)
-            if purchase_price_raw and purchase_price is None:
-                stats["purchase_csv_rows_skipped"] += 1
-                continue
+    for row in rows:
+        code = (row.get("code") or "").strip()
+        if not code:
+            stats["purchase_csv_rows_skipped"] += 1
+            continue
 
-            stats["purchase_csv_rows_loaded"] += 1
-            purchase_prices[code] = purchase_price
+        purchase_price_raw = (row.get("purchasePrice") or "").strip()
+        purchase_price = _parse_decimal(purchase_price_raw)
+        if purchase_price_raw and purchase_price is None:
+            stats["purchase_csv_rows_skipped"] += 1
+            continue
+
+        stats["purchase_csv_rows_loaded"] += 1
+        purchase_prices[code] = purchase_price
 
     stats["products_missing_purchase_price"] = 0
     stats["label_m_x"] = 0
