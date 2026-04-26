@@ -299,8 +299,21 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
 
     run_stats = {
         "products_total": len(products),
+        "purchase_csv_present": bool(margin_stats["purchase_csv_present"]),
+        "purchase_csv_bytes": margin_stats["purchase_csv_bytes"],
+        "purchase_csv_looks_like_html": bool(margin_stats["purchase_csv_looks_like_html"]),
+        "purchase_csv_encoding": margin_stats["purchase_csv_encoding"],
+        "purchase_csv_delimiter": margin_stats["purchase_csv_delimiter"],
+        "purchase_csv_header_preview": margin_stats["purchase_csv_header_preview"],
+        "purchase_csv_row_count": margin_stats["purchase_csv_row_count"],
         "purchase_csv_rows_loaded": margin_stats["purchase_csv_rows_loaded"],
         "purchase_csv_rows_skipped": margin_stats["purchase_csv_rows_skipped"],
+        "purchase_csv_rows_with_purchase_price": margin_stats["purchase_csv_rows_with_purchase_price"],
+        "purchase_csv_code_samples": margin_stats["purchase_csv_code_samples"],
+        "feed_id_samples": margin_stats["feed_id_samples"],
+        "purchase_csv_match_count_exact": margin_stats["purchase_csv_match_count_exact"],
+        "purchase_csv_match_count_normalized": margin_stats["purchase_csv_match_count_normalized"],
+        "products_matched_by_normalized_code": margin_stats["products_matched_by_normalized_code"],
         "products_with_purchase_price": margin_stats["products_with_purchase_price"],
         "products_missing_purchase_price": margin_stats["products_missing_purchase_price"],
         "count_custom_label_0_m_x": margin_stats["label_m_x"],
@@ -363,7 +376,20 @@ def run_pipeline(settings: dict, api_key: str | None = None, dry_run: bool = Fal
     print(
         "[RUN SUMMARY] "
         f"products_total={run_stats['products_total']} "
+        f"purchase_csv_present={run_stats['purchase_csv_present']} "
+        f"purchase_csv_bytes={run_stats['purchase_csv_bytes']} "
+        f"purchase_csv_looks_like_html={run_stats['purchase_csv_looks_like_html']} "
+        f"purchase_csv_encoding={run_stats['purchase_csv_encoding']} "
+        f"purchase_csv_delimiter={run_stats['purchase_csv_delimiter']} "
+        f"purchase_csv_header_preview={json.dumps(run_stats['purchase_csv_header_preview'], ensure_ascii=False)} "
+        f"purchase_csv_row_count={run_stats['purchase_csv_row_count']} "
         f"purchase_csv_rows_loaded={run_stats['purchase_csv_rows_loaded']} "
+        f"purchase_csv_rows_with_purchase_price={run_stats['purchase_csv_rows_with_purchase_price']} "
+        f"purchase_csv_code_samples={json.dumps(run_stats['purchase_csv_code_samples'], ensure_ascii=False)} "
+        f"feed_id_samples={json.dumps(run_stats['feed_id_samples'], ensure_ascii=False)} "
+        f"purchase_csv_match_count_exact={run_stats['purchase_csv_match_count_exact']} "
+        f"purchase_csv_match_count_normalized={run_stats['purchase_csv_match_count_normalized']} "
+        f"products_matched_by_normalized_code={run_stats['products_matched_by_normalized_code']} "
         f"products_with_purchase_price={run_stats['products_with_purchase_price']} "
         f"custom_label_0_m_x={run_stats['count_custom_label_0_m_x']} "
         f"custom_label_0_m_s={run_stats['count_custom_label_0_m_s']} "
