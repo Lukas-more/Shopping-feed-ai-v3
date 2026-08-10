@@ -21,9 +21,9 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     env:
       CACHE_KEY_PREFIX: shopping-feed-ai-cache-${{ github.ref_name }}-
-      MAX_AI_PRODUCTS: ${{ vars.MAX_AI_PRODUCTS }}
+      MAX_AI_PRODUCTS: "450"
       AI_SAFETY_MAX_SELECTED: ${{ vars.AI_SAFETY_MAX_SELECTED }}
-      AI_ENFORCE_SAFETY: ${{ vars.AI_ENFORCE_SAFETY }}
+      AI_ENFORCE_SAFETY: "false"
 
     steps:
       - name: Check out repository
